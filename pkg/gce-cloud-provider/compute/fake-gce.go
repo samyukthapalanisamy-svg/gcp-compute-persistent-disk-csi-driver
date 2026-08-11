@@ -305,7 +305,7 @@ func (cloud *FakeCloudProvider) AttachDisk(ctx context.Context, project string, 
 	return nil
 }
 
-func (cloud *FakeCloudProvider) ConvertDisk(ctx context.Context, project string, volKey *meta.Key, instanceName, instanceZone string, quickConversionOnly bool) error {
+func (cloud *FakeCloudProvider) ConvertDisk(ctx context.Context, project string, volKey *meta.Key, instanceName, instanceZone, targetDiskType string, quickConversionOnly bool) error {
 	if quickConversionOnly {
 		cloud.ConversionTestParams.FastConversionCalled = true
 		if cloud.ConversionTestParams.FastConversionFails {

@@ -319,6 +319,9 @@ func ExtractModifyVolumeParameters(parameters map[string]string) (ModifyVolumePa
 				return ModifyVolumeParameters{}, fmt.Errorf("parameters contain invalid throughput parameter: %w", err)
 			}
 			modifyVolumeParams.Throughput = &throughput
+		case ParameterKeyType:
+			diskType := strings.ToLower(value)
+			modifyVolumeParams.DiskType = &diskType
 		default:
 			return ModifyVolumeParameters{}, fmt.Errorf("parameters contain unknown parameter: %s", key)
 		}

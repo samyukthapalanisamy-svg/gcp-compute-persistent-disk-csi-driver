@@ -60,6 +60,10 @@ const (
 	DiskTypeHdE               = "hyperdisk-extreme"
 	DiskTypeHdML              = "hyperdisk-ml"
 
+	// PD disk types eligible for conversion to Hyperdisk
+	DiskTypeSSD      = "pd-ssd"
+	DiskTypeBalanced = "pd-balanced"
+
 	// Parameters for VolumeSnapshotClass
 	DiskSnapshotType = "snapshots"
 	DiskImageType    = "images"
@@ -70,3 +74,10 @@ const (
 	ParameterPDType         = "pd-type"
 	ParameterDiskPreference = "disk-type-preference"
 )
+
+// AllowedDiskTypeConversions maps a source disk type to the set of target
+// disk types it may be converted to via ControllerModifyVolume.
+var AllowedDiskTypeConversions = map[string]map[string]bool{
+	DiskTypeSSD:      {DiskTypeHyperdiskBalanced: true},
+	DiskTypeBalanced: {DiskTypeHyperdiskBalanced: true},
+}

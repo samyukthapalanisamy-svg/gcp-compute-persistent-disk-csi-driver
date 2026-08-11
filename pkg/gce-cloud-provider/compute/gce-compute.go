@@ -117,7 +117,7 @@ type GCECompute interface {
 	UpdateDisk(ctx context.Context, project string, volKey *meta.Key, existingDisk *CloudDisk, params parameters.ModifyVolumeParameters) error
 	AttachDisk(ctx context.Context, project string, volKey *meta.Key, readWrite, diskType, instanceZone, instanceName string, forceAttach bool) error
 	DetachDisk(ctx context.Context, project, deviceName, instanceZone, instanceName string) error
-	ConvertDisk(ctx context.Context, project string, volKey *meta.Key, instanceName, instanceZone string, quickConversionOnly bool) error
+	ConvertDisk(ctx context.Context, project string, volKey *meta.Key, instanceName, instanceZone, targetDiskType string, quickConversionOnly bool) error
 	SetDiskAccessMode(ctx context.Context, project string, volKey *meta.Key, accessMode string) error
 	SetDiskLabels(ctx context.Context, project string, volKey *meta.Key, disk *CloudDisk, labels map[string]string) error
 	ListCompatibleDiskTypeZones(ctx context.Context, project string, zones []string, diskType string) ([]string, error)
@@ -962,14 +962,15 @@ func (cloud *CloudProvider) DetachDisk(ctx context.Context, project, deviceName,
 	return nil
 }
 
-func (cloud *CloudProvider) ConvertDisk(ctx context.Context, project string, volKey *meta.Key, instanceName, instanceZone string, quickConversionOnly bool) error {
-	klog.V(5).Infof("Converting disk %v in instance %v zone %v", volKey.Name, instanceName, instanceZone)
+func (cloud *CloudProvider) ConvertDisk(ctx context.Context, project string, volKey *meta.Key, instanceName, instanceZone, targetDiskType string, quickConversionOnly bool) error {
+	klog.V(5).Infof("Converting disk %v in instance %v zone %v to type %q", volKey.Name, instanceName, instanceZone, targetDiskType)
 	service := cloud.alphaService
 
 	req := &computealpha.DisksConvertRequest{
 		Params: &computealpha.DiskConvertParams{
 			QuickConversionOnly:      quickConversionOnly,
 			ResetSupportedVmFamilies: true,
+			TargetDiskType:           targetDiskType,
 		},
 	}
 	op, err := service.Disks.Convert(project, instanceZone, volKey.Name, req).Context(ctx).Do()

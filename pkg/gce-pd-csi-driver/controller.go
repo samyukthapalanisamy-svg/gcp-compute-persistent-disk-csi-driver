@@ -913,6 +913,44 @@ func (gceCS *GCEControllerServer) ControllerModifyVolume(ctx context.Context, re
 		return nil, err
 	}
 
+	// Disk type conversion (e.g. pd-ssd -> hyperdisk-balanced) goes through a different
+	// GCE API (Disks.Convert) with different preconditions than IOPS/Throughput updates
+	// (Disks.Update), so it's handled as its own branch and returns early.
+	if volumeModifyParams.DiskType != nil {
+		if volumeModifyParams.IOPS != nil || volumeModifyParams.Throughput != nil {
+			err = status.Errorf(codes.InvalidArgument, "Cannot specify disk type conversion together with IOPS or throughput changes")
+			return nil, err
+		}
+
+		targetDiskType := *volumeModifyParams.DiskType
+		currentDiskType := existingDisk.GetPDType()
+
+		if existingDisk.LocationType() == meta.Regional {
+			err = status.Errorf(codes.InvalidArgument, "Cannot convert disk type for regional disk %s", volumeID)
+			return nil, err
+		}
+
+		if len(existingDisk.GetUsers()) > 0 {
+			err = status.Errorf(codes.FailedPrecondition, "Cannot convert disk type for volume %s: disk is still attached to %v", volumeID, existingDisk.GetUsers())
+			return nil, err
+		}
+
+		if currentDiskType == targetDiskType {
+			return &csi.ControllerModifyVolumeResponse{}, nil
+		}
+
+		if allowedTargets, ok := parameters.AllowedDiskTypeConversions[currentDiskType]; !ok || !allowedTargets[targetDiskType] {
+			err = status.Errorf(codes.InvalidArgument, "Conversion from disk type %s to %s is not supported", currentDiskType, targetDiskType)
+			return nil, err
+		}
+
+		if err := gceCS.CloudProvider.ConvertDisk(ctx, project, volKey, "", volKey.Zone, targetDiskType, false /* quickConversionOnly */); err != nil {
+			klog.Errorf("Failed to convert disk type for volume %s: %v", volumeID, err)
+			return nil, fmt.Errorf("Failed to convert disk type for volume %s: %w", volumeID, err)
+		}
+		return &csi.ControllerModifyVolumeResponse{}, nil
+	}
+
 	// Check if the disk supports dynamic IOPS/Throughput provisioning
 	diskType := existingDisk.GetPDType()
 	supportsIopsChange := gceCS.diskSupportsIopsChange(diskType)
@@ -1303,7 +1341,7 @@ func (gceCS *GCEControllerServer) convertDiskAndReAttach(ctx context.Context, pr
 	klog.Infof("Disk (%s) requires conversion before attachment, attempting conversion", volKey.Name)
 
 	// Attempt fast-only conversion
-	convertErr := gceCS.CloudProvider.ConvertDisk(ctx, project, volKey, instanceName, instanceZone, true /* quickConversionOnly */)
+	convertErr := gceCS.CloudProvider.ConvertDisk(ctx, project, volKey, instanceName, instanceZone, "" /* targetDiskType */, true /* quickConversionOnly */)
 	if convertErr == nil {
 		klog.Infof("Fast conversion for disk (%s) succeeded, retrying attach", volKey.Name)
 		metrics.SetConversionResult(ctx, "fast")
@@ -1321,7 +1359,7 @@ func (gceCS *GCEControllerServer) convertDiskAndReAttach(ctx context.Context, pr
 	if optedIn {
 		klog.Infof("Disk (%s) is opted-in, doing slow conversion", volKey.Name)
 		// Attempt conversion
-		convertErr := gceCS.CloudProvider.ConvertDisk(ctx, project, volKey, instanceName, instanceZone, false /* quickConversionOnly */)
+		convertErr := gceCS.CloudProvider.ConvertDisk(ctx, project, volKey, instanceName, instanceZone, "" /* targetDiskType */, false /* quickConversionOnly */)
 		if convertErr != nil {
 			return fmt.Errorf("unknown error while attempting slow conversion: %w", convertErr)
 		}
