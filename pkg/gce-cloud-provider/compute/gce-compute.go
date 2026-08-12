@@ -969,7 +969,7 @@ func (cloud *CloudProvider) ConvertDisk(ctx context.Context, project string, vol
 	req := &computealpha.DisksConvertRequest{
 		Params: &computealpha.DiskConvertParams{
 			QuickConversionOnly:      quickConversionOnly,
-			ResetSupportedVmFamilies: true,
+			ResetSupportedVmFamilies: targetDiskType == "",
 			TargetDiskType:           targetDiskType,
 		},
 	}
